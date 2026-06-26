@@ -77,7 +77,7 @@ Verification notes (no code change needed):
 - **Transparency / colour** — `transmission 1.0`, `ior 2.417`, neutral `0xfbfdff` attenuation → glassy
   and colourless.
 
-### Milestone 2 — CLOSE (tag `milestone-2`, commit `<doc commit>`)
+### Milestone 2 — CLOSE (tag `milestone-2`)
 
 Structural accuracy, full catalog coverage, real sizing, and snug fit are complete and
 **headless-verified** (24/24 combos non-degenerate and distinct; sizing matches charts). `tsc
