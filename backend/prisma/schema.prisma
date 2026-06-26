@@ -1,0 +1,77 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id         String      @id @default(uuid())
+  email      String      @unique
+  password   String
+  role       Role        @default(USER)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  savedSizes SavedSize[]
+  orders     Order[]
+
+  @@map("users")
+}
+
+model SavedSize {
+  id                   String   @id @default(uuid())
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedFingerSize  String   // Hex representation of AES-256-GCM encrypted finger size details
+  encryptedConfidence  String   // Hex representation of AES-256-GCM encrypted confidence score
+  iv                   String   // Initialization Vector (hex) used for encryption
+  authTag              String   // Authentication Tag (hex) used for AES-256-GCM integrity
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("saved_sizes")
+}
+
+model RingInventory {
+  id                    String   @id @default(uuid())
+  name                  String
+  stoneType             String
+  setting               String
+  price                 Float
+  stock                 Int
+  thicknessMm           Float    // Physical dimension
+  widthMm               Float    // Physical dimension
+  innerDiameterMm       Float    // Physical dimension
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("ring_inventory")
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItems  Json        // Stores structured list of ordered items: ring name, size, quantity, unit price
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
