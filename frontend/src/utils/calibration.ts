@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { appState } from '../state/store';
 import { JewelryGenerator, RingConfig } from './JewelryGenerator';
+import { resolveSettingSpec } from '../data/settingSpecs';
 
 // Global definitions for MediaPipe loaded via CDN
 declare global {
@@ -380,13 +381,9 @@ export class HandCalibrator {
       metalRaw.includes('platinum') ? 'platinum' :
       'white_gold'; // white gold / default
 
-    // Setting: catalog field is `style` ("Solitaire" | "Halo" | "Hidden Halo" | "Three Stone").
-    const styleRaw = (activeSetting?.style || appState.selectedSetting || '').toLowerCase();
-    const settingType: RingConfig['settingType'] =
-      styleRaw.includes('three')  ? 'three_stone' :
-      styleRaw.includes('hidden') ? 'hidden_halo' :
-      styleRaw.includes('halo')   ? 'halo' :
-      'solitaire';
+    // Setting: resolve the SKU's STRUCTURAL spec (design default by style, plus any per-SKU
+    // `spec` override carried on the catalog item). Drives the whole assembly via explicit fields.
+    const setting = resolveSettingSpec(activeSetting);
 
     // Shape: lowercase the catalog value; the generator handles round/oval/emerald/princess/
     // cushion/radiant and falls back to round for anything unrecognised.
@@ -400,7 +397,7 @@ export class HandCalibrator {
       metalType,
       metalFinish: /brushed|satin|matte/.test(metalRaw) ? 'brushed' : 'polished',
       stoneShape,
-      settingType,
+      setting,
       stoneCarat: parseFloat(activeDiamond.carat) || 1.5,
     };
 
@@ -408,7 +405,7 @@ export class HandCalibrator {
       // Temporary: confirm in the console that each selection reaches the generator distinctly.
       // On by default during this fix; set window.DEBUG_RING = false to silence.
       // eslint-disable-next-line no-console
-      console.log('[build3DRing] config →', JSON.stringify(config), 'from', { shape: activeDiamond.shape, style: activeSetting?.style, metal: activeSetting?.metal });
+      console.log('[build3DRing] config →', JSON.stringify(config), 'from', { shape: activeDiamond.shape, style: activeSetting?.style, metal: activeSetting?.metal, spec: activeSetting?.spec });
     }
 
     // --- Generate the ring assembly (includes occlusion cylinder) ---

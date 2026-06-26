@@ -21,11 +21,11 @@
  */
 
 import * as THREE from 'three';
+import { SettingSpec } from '../data/settingSpecs';
 
 // ─── Configuration ───────────────────────────────────────────────────────────
 
 export type StoneShape = 'round' | 'oval' | 'emerald' | 'princess' | 'cushion' | 'radiant';
-export type SettingType = 'solitaire' | 'halo' | 'hidden_halo' | 'three_stone';
 
 export interface RingConfig {
   ringSize: number;                 // shank radius (world units ≈ mm)
@@ -34,7 +34,7 @@ export interface RingConfig {
   metalType: 'yellow_gold' | 'white_gold' | 'rose_gold' | 'platinum';
   metalFinish?: 'polished' | 'brushed';
   stoneShape: StoneShape;
-  settingType: SettingType;         // drives the whole part assembly, not just decoration
+  setting: SettingSpec;             // explicit STRUCTURAL fields drive assembly (not a category name)
   stoneCarat: number;
   stoneIor?: number;                // 2.417 = diamond; exposed for future stone types
 }
@@ -130,6 +130,17 @@ function buildGeo(out: number[]): THREE.BufferGeometry {
 
 // ─── Generator ───────────────────────────────────────────────────────────────
 
+/** Shared context passed to the per-layout assembly builders. */
+interface AssemblyCtx {
+  group: THREE.Group;
+  config: RingConfig;
+  R: number;            // centre stone half-width (world units)
+  bandOuter: number;    // band outer radius
+  ringRadius: number;   // band centreline radius
+  tubeRadius: number;   // band tube radius
+  spec: SettingSpec;    // structural fields driving the assembly
+}
+
 export class JewelryGenerator {
 
   public static generateRing(config: RingConfig): THREE.Group {
@@ -153,82 +164,67 @@ export class JewelryGenerator {
     // 2. Centre-stone HALF-WIDTH from real carat→mm size charts per shape (not a single factor).
     const R = JewelryGenerator.halfWidthMm(config.stoneShape, config.stoneCarat);
 
-    // 3. Assemble parts per SETTING TYPE — these are mechanically different rings, each built
-    //    to match the shop's own reference image for that setting (see public/settings/*.png).
-    switch (config.settingType) {
-      case 'three_stone':
-        // Centre + two flanking stones + shoulder pavé down each side.
-        JewelryGenerator.buildThreeStone(group, config, R, bandOuter, ringRadius, tubeRadius);
-        break;
-      case 'halo':
-        // Centre + a bold flat accent ring at the girdle + shoulder pavé (split-shoulder look).
-        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, ringRadius, tubeRadius, 'halo');
-        break;
-      case 'hidden_halo':
-        // Centre + an accent ring tucked UNDER the basket (hidden from top, seen in profile)
-        // + shoulder pavé. Structurally distinct from a visible halo.
-        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, ringRadius, tubeRadius, 'hidden');
-        break;
-      default: // solitaire — clean band + basket, no accents anywhere.
-        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, ringRadius, tubeRadius, 'none');
-        break;
+    // 3. Assemble parts from the SettingSpec's STRUCTURAL FIELDS (not a category switch).
+    //    Two SKUs render differently iff these fields differ. Three-stone is distinguished by
+    //    sideStones; everything else is a centre cluster whose halo/pavé/prongs come from fields.
+    const ctx = { group, config, R, bandOuter, ringRadius, tubeRadius, spec: config.setting };
+    if (config.setting.sideStones >= 2) {
+      JewelryGenerator.buildThreeStone(ctx);
+    } else {
+      JewelryGenerator.buildCentreCluster(ctx);
     }
 
     return group;
   }
 
-  // ─── Assembly layouts (per setting type) ──────────────────────────────────────
+  // ─── Assembly layouts (driven by SettingSpec structural fields) ──────────────
 
-  /** Solitaire / halo / hidden-halo: one centre stone cluster with the right accent treatment. */
-  private static buildCentreCluster(
-    group: THREE.Group, config: RingConfig, R: number, bandOuter: number,
-    ringRadius: number, tubeRadius: number, haloMode: 'none' | 'halo' | 'hidden'
-  ): void {
-    const spec = JewelryGenerator.buildShape(config.stoneShape, R);
-    const asm = JewelryGenerator.createStoneAssembly(config, spec, R);
-    const girdleZ = bandOuter + spec.pavilionDepth;        // world z of the centre girdle plane
+  /** Solitaire / halo / hidden-halo: one centre cluster, accents driven by the spec fields. */
+  private static buildCentreCluster(ctx: AssemblyCtx): void {
+    const { group, config, R, bandOuter, ringRadius, tubeRadius, spec } = ctx;
+    const stone = JewelryGenerator.buildShape(config.stoneShape, R);
+    const asm = JewelryGenerator.createStoneAssembly(config, stone, R, spec.prongCount);
+    const girdleZ = bandOuter + stone.pavilionDepth;       // world z of the centre girdle plane
     asm.position.set(0, 0, girdleZ);                       // culet rests on the band
     group.add(asm);
 
-    if (haloMode === 'halo') {
-      // Bold flat accent ring level with the girdle, hugging it (minimal bare metal).
-      const accentR = R * 0.28;
-      const orbit   = R + accentR * 0.82;
-      group.add(JewelryGenerator.createHalo(config, accentR, orbit, girdleZ, /*tiltDeg*/ 0));
-      // Split-shoulder pavé (two rows) like the catalog halo reference.
-      JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, 2);
-    } else if (haloMode === 'hidden') {
-      // HIDDEN halo: smaller accents tucked UNDER the crown, below the girdle and tilted
-      // outward so they're hidden from top-down but sparkle from the side profile.
-      const accentR = R * 0.20;
-      const orbit   = R * 0.92;                             // just inside the crown edge
-      const seatZ   = girdleZ - spec.pavilionDepth * 0.45;  // down in the gallery
+    if (spec.halo === 'visible') {
+      // Flat accent ring(s) level with the girdle. haloRows=2 adds a second, larger concentric
+      // ring → a chunkier double halo that reads differently from a single-row design.
+      const accentR = R * spec.accentScale;
+      for (let row = 0; row < Math.max(1, spec.haloRows); row++) {
+        const orbit = R + accentR * (0.82 + row * 1.7);    // each row sits one accent further out
+        group.add(JewelryGenerator.createHalo(config, accentR, orbit, girdleZ, /*tiltDeg*/ 0));
+      }
+    } else if (spec.halo === 'hidden') {
+      // Accents tucked UNDER the crown (below the girdle, tilted outward) — hidden from top.
+      const accentR = R * spec.accentScale;
+      const orbit   = R * 0.92;
+      const seatZ   = girdleZ - stone.pavilionDepth * 0.45;
       group.add(JewelryGenerator.createHalo(config, accentR, orbit, seatZ, /*tiltDeg*/ 55));
-      JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, 1);
     }
-    // 'none' (solitaire): nothing added — clean band + basket only.
+    if (spec.paveRows > 0) {
+      JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, spec.paveRows);
+    }
+    // solitaire (halo 'none', paveRows 0): clean band + basket only.
   }
 
-  /** Three-stone: larger centre + two smaller flanking stones in a row along the finger (Y),
-   *  joined to the centre by short metal gallery bridges so the trio reads as one ring with
-   *  visible metal between the stones (not three floating gems). */
-  private static buildThreeStone(
-    group: THREE.Group, config: RingConfig, R: number, bandOuter: number,
-    ringRadius: number, tubeRadius: number
-  ): void {
-    const sideR = R * 0.60;                                 // side stones clearly smaller
+  /** Three-stone: larger centre + two smaller flanking stones, joined by gallery bridges. */
+  private static buildThreeStone(ctx: AssemblyCtx): void {
+    const { group, config, R, bandOuter, ringRadius, tubeRadius, spec } = ctx;
+    const sideR = R * (spec.sideStoneScale || 0.60);       // side stone size from the spec
     const specC = JewelryGenerator.buildShape(config.stoneShape, R);
     const specS1 = JewelryGenerator.buildShape(config.stoneShape, sideR);
     const specS2 = JewelryGenerator.buildShape(config.stoneShape, sideR);
 
-    const centre = JewelryGenerator.createStoneAssembly(config, specC, R);
+    const centre = JewelryGenerator.createStoneAssembly(config, specC, R, spec.prongCount);
     centre.position.set(0, 0, bandOuter + specC.pavilionDepth);
     group.add(centre);
 
     // A small visible gap of metal between adjacent stones (girdles do not touch).
     const gap = R + sideR + R * 0.30;
-    const left  = JewelryGenerator.createStoneAssembly(config, specS1, sideR);
-    const right = JewelryGenerator.createStoneAssembly(config, specS2, sideR);
+    const left  = JewelryGenerator.createStoneAssembly(config, specS1, sideR, spec.prongCount);
+    const right = JewelryGenerator.createStoneAssembly(config, specS2, sideR, spec.prongCount);
     left.position.set(0,  gap, bandOuter + specS1.pavilionDepth);
     right.position.set(0, -gap, bandOuter + specS2.pavilionDepth);
     group.add(left, right);
@@ -244,8 +240,10 @@ export class JewelryGenerator {
       group.add(bridge);
     }
 
-    // Shoulder pavé running down each side past the side stones, like the catalog reference.
-    JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, 1);
+    // Shoulder pavé running down each side past the side stones (rows from the spec).
+    if (spec.paveRows > 0) {
+      JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, spec.paveRows);
+    }
   }
 
   /**
@@ -513,7 +511,7 @@ export class JewelryGenerator {
   //  culet points to −Z (toward the band). Caller positions it on the band so the culet
   //  rests at bandOuter. The same assembly is reused for centre and side stones.
 
-  private static createStoneAssembly(config: RingConfig, spec: StoneSpec, R: number): THREE.Group {
+  private static createStoneAssembly(config: RingConfig, spec: StoneSpec, R: number, prongCount = 4): THREE.Group {
     const g = new THREE.Group();
     g.name = 'stone-assembly';
     const metal = JewelryGenerator.createMetalMaterial(config);
@@ -531,7 +529,7 @@ export class JewelryGenerator {
     g.add(rail);
 
     // SHORT claw prongs that barely clear the crown and curl inward — not long needles.
-    const count   = 4;
+    const count   = Math.max(3, prongCount);
     const prongR  = Math.max(0.12, R * 0.10);
     // Total prong length ≈ crown height + a touch — short and unobtrusive.
     const L       = spec.crownHeight + spec.girdleThickness + R * 0.12;
