@@ -77,6 +77,35 @@ Verification notes (no code change needed):
 - **Transparency / colour** — `transmission 1.0`, `ior 2.417`, neutral `0xfbfdff` attenuation → glassy
   and colourless.
 
+- `1761167` — **per-SKU field-driven assembly**: new `src/data/settingSpecs.ts` defines a
+  `SettingSpec` (structural fields: `prongCount`, `halo` mode, `haloRows`, `accentScale`,
+  `paveRows`, `sideStones`, `sideStoneScale`, `gallery`). `generateRing` now builds from these
+  fields instead of a `settingType` switch. `resolveSettingSpec(catalogSetting)` returns the
+  design default by `style` merged with any per-SKU `spec` override.
+
+#### Per-SKU vs per-category — data reality & coverage
+
+**Finding (verified in `Customizer.ts`):** the catalog has **150 setting SKUs but only 4 distinct
+designs** — `img` is a 1:1 function of `style`, so every "Halo" SKU shares `halo.png`, etc. The
+only per-SKU variation in the data is **metal + price**. There are no per-SKU distinct photos or
+structural fields to derive bespoke geometry from, so "per-SKU" legitimately collapses to
+"per-design (4)" here. We did **not** fabricate per-SKU differences (would violate "derive from the
+SKU's own photo"). Chosen approach (user-confirmed): field-driven refactor for the 4 real designs,
+made **per-SKU-override-ready**.
+
+| design (SKU group) | source | status |
+| --- | --- | --- |
+| Solitaire | `public/settings/solitaire.png` | ✅ per-design accurate (plain band, 4-prong basket) |
+| Halo | `public/settings/halo.png` | ✅ per-design accurate (single girdle ring + split-shoulder pavé) |
+| Hidden Halo | `public/settings/hidden_halo.png` | ✅ per-design accurate (under-basket accents + 1 pavé row) |
+| Three Stone | `public/settings/threestone.png` | ✅ per-design accurate (centre + 2 sides + pavé) |
+| true per-SKU bespoke designs | — | ⏳ pending real catalog data (no distinct SKU photos/fields exist yet) |
+
+**Self-check (headless):** two `Halo` SKUs — one default, one with a per-SKU override
+`{ haloRows: 2, accentScale: 0.34, paveRows: 1 }` — render **differently** (14 accents/24 pavé vs
+32 accents/12 pavé); two identical specs render **identically**. So the fields genuinely drive the
+geometry, and real per-SKU data will diverge automatically the moment the catalog carries it.
+
 ### Milestone 2 — CLOSE (tag `milestone-2`)
 
 Structural accuracy, full catalog coverage, real sizing, and snug fit are complete and
