@@ -153,17 +153,24 @@ export class JewelryGenerator {
     // 2. Centre-stone HALF-WIDTH from real carat→mm size charts per shape (not a single factor).
     const R = JewelryGenerator.halfWidthMm(config.stoneShape, config.stoneCarat);
 
-    // 3. Assemble parts per SETTING TYPE — these are mechanically different rings.
+    // 3. Assemble parts per SETTING TYPE — these are mechanically different rings, each built
+    //    to match the shop's own reference image for that setting (see public/settings/*.png).
     switch (config.settingType) {
       case 'three_stone':
-        JewelryGenerator.buildThreeStone(group, config, R, bandOuter);
+        // Centre + two flanking stones + shoulder pavé down each side.
+        JewelryGenerator.buildThreeStone(group, config, R, bandOuter, ringRadius, tubeRadius);
         break;
       case 'halo':
-      case 'hidden_halo':
-        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, /*withHalo*/ true);
+        // Centre + a bold flat accent ring at the girdle + shoulder pavé (split-shoulder look).
+        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, ringRadius, tubeRadius, 'halo');
         break;
-      default: // solitaire
-        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, /*withHalo*/ false);
+      case 'hidden_halo':
+        // Centre + an accent ring tucked UNDER the basket (hidden from top, seen in profile)
+        // + shoulder pavé. Structurally distinct from a visible halo.
+        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, ringRadius, tubeRadius, 'hidden');
+        break;
+      default: // solitaire — clean band + basket, no accents anywhere.
+        JewelryGenerator.buildCentreCluster(group, config, R, bandOuter, ringRadius, tubeRadius, 'none');
         break;
     }
 
@@ -172,29 +179,42 @@ export class JewelryGenerator {
 
   // ─── Assembly layouts (per setting type) ──────────────────────────────────────
 
-  /** Solitaire / halo: one centre stone cluster, optionally hugged by an accent halo. */
+  /** Solitaire / halo / hidden-halo: one centre stone cluster with the right accent treatment. */
   private static buildCentreCluster(
-    group: THREE.Group, config: RingConfig, R: number, bandOuter: number, withHalo: boolean
+    group: THREE.Group, config: RingConfig, R: number, bandOuter: number,
+    ringRadius: number, tubeRadius: number, haloMode: 'none' | 'halo' | 'hidden'
   ): void {
     const spec = JewelryGenerator.buildShape(config.stoneShape, R);
     const asm = JewelryGenerator.createStoneAssembly(config, spec, R);
-    asm.position.set(0, 0, bandOuter + spec.pavilionDepth); // culet rests on the band
+    const girdleZ = bandOuter + spec.pavilionDepth;        // world z of the centre girdle plane
+    asm.position.set(0, 0, girdleZ);                       // culet rests on the band
     group.add(asm);
 
-    if (withHalo) {
-      // Tight ring of accents hugging the centre girdle — minimal bare metal between stones.
+    if (haloMode === 'halo') {
+      // Bold flat accent ring level with the girdle, hugging it (minimal bare metal).
       const accentR = R * 0.28;
-      const orbit   = R + accentR * 0.82;                  // pulled in so accents hug the girdle
-      const halo = JewelryGenerator.createHalo(config, R, accentR, orbit, bandOuter);
-      group.add(halo);
+      const orbit   = R + accentR * 0.82;
+      group.add(JewelryGenerator.createHalo(config, accentR, orbit, girdleZ, /*tiltDeg*/ 0));
+      // Split-shoulder pavé (two rows) like the catalog halo reference.
+      JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, 2);
+    } else if (haloMode === 'hidden') {
+      // HIDDEN halo: smaller accents tucked UNDER the crown, below the girdle and tilted
+      // outward so they're hidden from top-down but sparkle from the side profile.
+      const accentR = R * 0.20;
+      const orbit   = R * 0.92;                             // just inside the crown edge
+      const seatZ   = girdleZ - spec.pavilionDepth * 0.45;  // down in the gallery
+      group.add(JewelryGenerator.createHalo(config, accentR, orbit, seatZ, /*tiltDeg*/ 55));
+      JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, 1);
     }
+    // 'none' (solitaire): nothing added — clean band + basket only.
   }
 
   /** Three-stone: larger centre + two smaller flanking stones in a row along the finger (Y),
    *  joined to the centre by short metal gallery bridges so the trio reads as one ring with
    *  visible metal between the stones (not three floating gems). */
   private static buildThreeStone(
-    group: THREE.Group, config: RingConfig, R: number, bandOuter: number
+    group: THREE.Group, config: RingConfig, R: number, bandOuter: number,
+    ringRadius: number, tubeRadius: number
   ): void {
     const sideR = R * 0.60;                                 // side stones clearly smaller
     const specC = JewelryGenerator.buildShape(config.stoneShape, R);
@@ -222,6 +242,43 @@ export class JewelryGenerator {
       bridge.position.set(0, (dir * gap) / 2, bandOuter - R * 0.05); // sit just on the shank
       // Cylinder default axis = Y → already along the finger; no rotation needed.
       group.add(bridge);
+    }
+
+    // Shoulder pavé running down each side past the side stones, like the catalog reference.
+    JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, 1);
+  }
+
+  /**
+   * Pavé melee set into the band shoulders. Tiny round accents seated on the band's outer
+   * surface, running down each shoulder from near the top toward the finger sides, tables
+   * facing radially outward. `rows` = 1 (single line) or 2 (split-shoulder look).
+   */
+  private static addShoulderPave(
+    group: THREE.Group, config: RingConfig, ringRadius: number, tubeRadius: number, rows: number
+  ): void {
+    const mat = JewelryGenerator.createDiamondMaterial(config);
+    const accentR = Math.max(0.45, tubeRadius * 0.32);     // small melee
+    const accent = JewelryGenerator.buildShape('round', accentR); // table faces +Z
+    const surface = ringRadius + tubeRadius * 0.55;        // seated into the outer surface
+    const zUp = new THREE.Vector3(0, 0, 1);
+    const yOffset = rows === 2 ? tubeRadius * 0.42 : 0;     // split rows along the band width
+
+    // Walk each shoulder: φ from just off the top down toward the finger sides.
+    const phiStart = 0.32, phiEnd = 1.35, step = 0.20;     // radians (~18°→77°)
+    for (let phi = phiStart; phi <= phiEnd; phi += step) {
+      for (const sideSign of [1, -1]) {                    // both shoulders (left/right of top)
+        const a = sideSign * phi;
+        // Band centreline point at circumferential angle `a` (0 = +Z top), hole axis = Y.
+        const radial = new THREE.Vector3(Math.sin(a), 0, Math.cos(a)); // outward normal
+        const quat = new THREE.Quaternion().setFromUnitVectors(zUp, radial);
+        const rowOffsets = rows === 2 ? [yOffset, -yOffset] : [0];
+        for (const oy of rowOffsets) {
+          const m = new THREE.Mesh(accent.geometry, mat);
+          m.position.copy(radial).multiplyScalar(surface).setY(oy);
+          m.quaternion.copy(quat);
+          group.add(m);
+        }
+      }
     }
   }
 
@@ -505,10 +562,13 @@ export class JewelryGenerator {
     return g;
   }
 
-  // ─── Halo (tight accent ring hugging the centre girdle) ──────────────────────
-
+  /**
+   * A tight accent ring around the centre axis at world height `seatZ`.
+   *   tiltDeg 0   → flat ring, tables facing the camera (visible halo at the girdle).
+   *   tiltDeg > 0 → tables tilted outward (hidden halo: tucked under the crown, seen in profile).
+   */
   private static createHalo(
-    config: RingConfig, centreR: number, accentR: number, orbit: number, bandOuter: number
+    config: RingConfig, accentR: number, orbit: number, seatZ: number, tiltDeg: number
   ): THREE.Group {
     const g = new THREE.Group();
     g.name = 'halo';
@@ -517,22 +577,23 @@ export class JewelryGenerator {
     // Accent count chosen so the small stones sit shoulder-to-shoulder around the orbit
     // (spacing factor ~1.95 → near-touching melee, typically 14–20 stones).
     const count = Math.max(14, Math.round((2 * Math.PI * orbit) / (accentR * 1.95)));
-    const accent = JewelryGenerator.buildShape('round', accentR); // already table-facing +Z
-    const girdleZ = bandOuter + JewelryGenerator.haloSeatDepth(centreR);
+    const accent = JewelryGenerator.buildShape('round', accentR); // table faces +Z
+    const tilt = (tiltDeg * Math.PI) / 180;
+    const zUp = new THREE.Vector3(0, 0, 1);
 
     for (let i = 0; i < count; i++) {
       const a = (i / count) * Math.PI * 2;
       const m = new THREE.Mesh(accent.geometry, mat);
-      // Lay the accents in a flat ring at the centre stone's girdle height.
-      m.position.set(Math.cos(a) * orbit, Math.sin(a) * orbit, girdleZ);
+      m.position.set(Math.cos(a) * orbit, Math.sin(a) * orbit, seatZ);
+      if (tilt > 0) {
+        // Tilt the table from +Z toward the outward radial direction in the vertical plane.
+        const radial = new THREE.Vector3(Math.cos(a), Math.sin(a), 0);
+        const dir = zUp.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(radial, Math.sin(tilt)).normalize();
+        m.quaternion.setFromUnitVectors(zUp, dir);
+      }
       g.add(m);
     }
     return g;
-  }
-
-  /** Approx. pavilion depth used to seat the halo ring level with the centre girdle. */
-  private static haloSeatDepth(R: number): number {
-    return 0.86 * R; // matches the round-brilliant pavilion depth fraction
   }
 
   // ─── Occlusion cylinder ──────────────────────────────────────────────────────
