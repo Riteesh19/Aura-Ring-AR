@@ -191,11 +191,13 @@ export class JewelryGenerator {
     }
   }
 
-  /** Three-stone: larger centre + two smaller flanking stones in a row along the finger (Y). */
+  /** Three-stone: larger centre + two smaller flanking stones in a row along the finger (Y),
+   *  joined to the centre by short metal gallery bridges so the trio reads as one ring with
+   *  visible metal between the stones (not three floating gems). */
   private static buildThreeStone(
     group: THREE.Group, config: RingConfig, R: number, bandOuter: number
   ): void {
-    const sideR = R * 0.62;
+    const sideR = R * 0.60;                                 // side stones clearly smaller
     const specC = JewelryGenerator.buildShape(config.stoneShape, R);
     const specS1 = JewelryGenerator.buildShape(config.stoneShape, sideR);
     const specS2 = JewelryGenerator.buildShape(config.stoneShape, sideR);
@@ -204,13 +206,24 @@ export class JewelryGenerator {
     centre.position.set(0, 0, bandOuter + specC.pavilionDepth);
     group.add(centre);
 
-    const gap = R + sideR + R * 0.10;                      // tight spacing, minimal metal gap
+    // A small visible gap of metal between adjacent stones (girdles do not touch).
+    const gap = R + sideR + R * 0.30;
     const left  = JewelryGenerator.createStoneAssembly(config, specS1, sideR);
     const right = JewelryGenerator.createStoneAssembly(config, specS2, sideR);
-    // Flank along local Y (the finger bone axis); they sit slightly lower on the shank.
-    left.position.set(0,  gap, bandOuter + specS1.pavilionDepth - R * 0.12);
-    right.position.set(0, -gap, bandOuter + specS2.pavilionDepth - R * 0.12);
+    left.position.set(0,  gap, bandOuter + specS1.pavilionDepth);
+    right.position.set(0, -gap, bandOuter + specS2.pavilionDepth);
     group.add(left, right);
+
+    // Gallery bridges: thin metal bars along Y at the band surface tying each side stone to
+    // the centre, so metal is visible between the clusters and the sides aren't floating.
+    const metal = JewelryGenerator.createMetalMaterial(config);
+    const bridgeGeo = new THREE.CylinderGeometry(R * 0.10, R * 0.10, gap, 8);
+    for (const dir of [1, -1]) {
+      const bridge = new THREE.Mesh(bridgeGeo, metal);
+      bridge.position.set(0, (dir * gap) / 2, bandOuter - R * 0.05); // sit just on the shank
+      // Cylinder default axis = Y → already along the finger; no rotation needed.
+      group.add(bridge);
+    }
   }
 
   // ─── Stone spec dispatch ──────────────────────────────────────────────────────
