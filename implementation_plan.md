@@ -33,7 +33,31 @@ git repo. Each milestone is a tag; intermediate Milestone 2 steps are individual
 Living changelog — one line + commit hash per meaningful change; small separately-committed steps
 so any single one can be reverted without losing the rest.
 
-- _(no commits yet — opening the milestone)_
+- `850caf6` — open milestone changelog; record Milestone 1 checkpoint.
+- `7ca6c7c` — three-stone: rebuilt with gallery bridges + a visible band gap between clusters
+  (headless-verified: 3 distinct stone assemblies + 2 connecting bridges; side stones no longer float).
+- `e6648bb` — halo: tightened accent size/spacing for a continuous melee ring
+  (headless-verified: 14 accents hugging the girdle; range 14–20).
+- `6a29d69` — diamond: neutral `attenuationColor` (`0xfbfdff`, long distance) for a colourless/icy
+  read (was a warm `0xfff6ec` that tinted the stone yellow).
+- `3bdb52d` — diamond: reduced `dispersion` 0.035 → 0.02 (occasional facet flashes, not a constant
+  rainbow tint).
+
+Verification notes (no code change needed):
+- **Solitaire** is already minimal — one stone + 4 short claws + one slim basket rail, nothing extra
+  on the band. Confirmed clean.
+- **Specular character** relies on the custom HDR studio environment with small bright softboxes;
+  confirmed `scene.environment` is bound once in `initThreeJS()` via `createStudioEnvironment()`,
+  and the gem uses `roughness 0.015` + `flatShading` for scattered per-facet glints.
+- **Transparency** read preserved: `transmission 1.0`, `ior 2.417`, carat-derived `thickness` — glassy,
+  not opaque/metallic.
+
+**Proposed close (pending live visual confirmation):** structural settings + material neutrality are
+done and headless-verified, but the WebGL look could not be rendered here. Gate to tag `milestone-2`:
+confirm in-browser that solitaire/three-stone/halo each read correctly against the reference photo and
+the diamond looks colourless with scattered sparkle + occasional fire. Candidate **Milestone 3** items:
+metal specular hotspot tightness vs HDRI, prong/claw close-up fidelity, three-stone bridge styling,
+and hidden-halo differentiation from standard halo (currently identical).
 
 ## Architecture Overview
 
