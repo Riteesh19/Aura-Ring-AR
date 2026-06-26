@@ -282,7 +282,7 @@ export class JewelryGenerator {
       // a fancy-colour stone is explicitly selected (future stoneColor config).
       attenuationColor: new THREE.Color(0xfbfdff),
       attenuationDistance: 14.0 * cs,
-      dispersion: 0.035,                        // restrained "fire" (high → rainbow sticker)
+      dispersion: 0.02,                         // subtle "fire" — occasional facet flashes, not a constant rainbow tint
       transparent: true,
       clearcoat: 1.0,
       clearcoatRoughness: 0.0,
