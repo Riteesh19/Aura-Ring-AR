@@ -277,8 +277,11 @@ export class JewelryGenerator {
       transmission: 1.0,
       ior: config.stoneIor ?? 2.417,            // diamond; configurable per stone type
       thickness: 4.0 * cs,                      // table→culet depth in mm → real refraction
-      attenuationColor: new THREE.Color(0xfff6ec), // faint warm-white interior
-      attenuationDistance: 6.0 * cs,
+      // Colourless/icy read: a near-neutral interior (very faint cool, never warm) over a long
+      // attenuation distance so the tint stays negligible. Swap to a warm/fancy colour only when
+      // a fancy-colour stone is explicitly selected (future stoneColor config).
+      attenuationColor: new THREE.Color(0xfbfdff),
+      attenuationDistance: 14.0 * cs,
       dispersion: 0.035,                        // restrained "fire" (high → rainbow sticker)
       transparent: true,
       clearcoat: 1.0,
