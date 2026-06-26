@@ -4,6 +4,37 @@ This document describes the implemented architecture for the virtual ring try-on
 
 > **Note:** This supersedes the earlier "Backend Image Compositing" plan (PNG assets + `sharp`). The diamond and setting are **not** flat composited images — they are generated as true 3D geometry on the client. There is no `/api/render/ring` endpoint and no asset-compositing pipeline.
 
+## Milestones
+
+Git checkpoints for this work live in a **dedicated repo** initialized at the project root
+(`/Users/riteesh/Documents/Windsurf/Aura-ring-AR`), separate from the surrounding home-directory
+git repo. Each milestone is a tag; intermediate Milestone 2 steps are individual commits.
+
+### Milestone 1 ✅ (tag `milestone-1`, commit `8a9ebb1`)
+
+`git reset --hard milestone-1` / `git checkout milestone-1` restores this exact, building state
+(verified: clean tree, tag == HEAD, `tsc --noEmit` clean on both files).
+
+- **Achieved:**
+  - Config changes correctly trigger full regeneration — the earlier static-render bug is fixed and
+    verified across multiple stone+setting combinations (headless: distinct geometry/part trees).
+  - Metal type visibly changes material/color (catalog "18k White Gold" etc. now keyword-mapped).
+  - Band geometry reads as a curved closed loop following the finger (band bbox 19.5mm in X and Z).
+  - Diamond uses a true faceted mesh (hand-built brilliant/step-cut polyhedra), not a smooth revolve
+    or primitive.
+- **Known gaps carried into Milestone 2:**
+  - Setting types (solitaire / three-stone / halo) don't yet read as structurally correct/distinct
+    against real jewelry.
+  - Diamond material is close but not fully photoreal — specular character, fire, and color
+    neutrality not yet fully dialed in.
+
+### Milestone 2 (in progress)
+
+Living changelog — one line + commit hash per meaningful change; small separately-committed steps
+so any single one can be reverted without losing the rest.
+
+- _(no commits yet — opening the milestone)_
+
 ## Architecture Overview
 
 - **Framework:** Vanilla Three.js (`three@0.184`). **No** React Three Fiber / drei — they caused WebGL context conflicts with the camera tracking loop.
