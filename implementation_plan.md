@@ -42,22 +42,53 @@ so any single one can be reverted without losing the rest.
   read (was a warm `0xfff6ec` that tinted the stone yellow).
 - `3bdb52d` — diamond: reduced `dispersion` 0.035 → 0.02 (occasional facet flashes, not a constant
   rainbow tint).
+- `510bf6a` — changelog update; propose close.
+- `40aa450` — real per-shape carat→mm stone sizing from diamond size charts (half-width table +
+  per-cut length:width). Headless-verified 1.00ct footprints: round 6.5², oval 5.7×7.7, emerald
+  5.0×7.0, princess 5.5², cushion 6.0², radiant 5.4×7.0 — all matching standard charts.
+- `b188bf7` — snug band fit: scale now derived from the band inner diameter (14.5) × 6% clearance
+  instead of the magic `/10.4` that produced a loose ~1.4× loop with visible daylight.
+- `99b2dca` — **hidden-halo given its own assembly** (under-basket accents tilted outward, hidden
+  from top / visible in profile) — fixes the fall-through to the visible-halo path (the "flower-blob"
+  bug). Added **shoulder pavé** melee to halo (2 split rows), hidden-halo (1 row) and three-stone,
+  matching the catalog reference PNGs. `createHalo` generalized with explicit seat height + tilt.
+
+#### Catalog coverage — every setting has its own explicit, non-degenerate path
+
+Authoritative catalog (`Customizer.ts`): shapes = Round/Oval/Emerald/Princess/Cushion/Radiant;
+settings = Solitaire/Halo/Hidden Halo/Three Stone. Built each to match `public/settings/*.png`.
+Headless QA over all **6 × 4 = 24** combinations — all non-degenerate (finite bbox, tris > 0), and:
+
+| setting | stones | halo accents | shoulder pavé | matches reference |
+| --- | --- | --- | --- | --- |
+| solitaire | 1 | 0 | none | clean band + basket ✓ |
+| three_stone | 3 | 0 | 1 row + 2 bridges | centre + 2 sides + shoulder pavé ✓ |
+| halo | 1 | 14 (girdle) | 2 split rows | bold top ring + split-shoulder pavé ✓ |
+| hidden_halo | 1 | 15 (under basket, tilted) | 1 row | accents under crown + pavé ✓ |
+
+No two settings share a shape; hidden_halo ≠ halo (10063 vs 11647 tris). The previously-broken
+**3.11ct oval hidden_halo** now produces sane geometry (finite bbox, 15 accents).
 
 Verification notes (no code change needed):
-- **Solitaire** is already minimal — one stone + 4 short claws + one slim basket rail, nothing extra
-  on the band. Confirmed clean.
-- **Specular character** relies on the custom HDR studio environment with small bright softboxes;
-  confirmed `scene.environment` is bound once in `initThreeJS()` via `createStudioEnvironment()`,
-  and the gem uses `roughness 0.015` + `flatShading` for scattered per-facet glints.
-- **Transparency** read preserved: `transmission 1.0`, `ior 2.417`, carat-derived `thickness` — glassy,
-  not opaque/metallic.
+- **Per-finger fit** — MCP/PIP indices confirmed correct for all four fingers (index 5/6, middle
+  9/10, ring 13/14, pinky 17/18), identical in the sizing and try-on paths.
+- **Specular character** — custom HDR env has 4 small bright softboxes (`createStudioEnvironment`),
+  bound once in `initThreeJS`; gem uses `roughness 0.015` + `flatShading` for scattered glints.
+- **Transparency / colour** — `transmission 1.0`, `ior 2.417`, neutral `0xfbfdff` attenuation → glassy
+  and colourless.
 
-**Proposed close (pending live visual confirmation):** structural settings + material neutrality are
-done and headless-verified, but the WebGL look could not be rendered here. Gate to tag `milestone-2`:
-confirm in-browser that solitaire/three-stone/halo each read correctly against the reference photo and
-the diamond looks colourless with scattered sparkle + occasional fire. Candidate **Milestone 3** items:
-metal specular hotspot tightness vs HDRI, prong/claw close-up fidelity, three-stone bridge styling,
-and hidden-halo differentiation from standard halo (currently identical).
+### Milestone 2 — CLOSE (tag `milestone-2`, commit `<doc commit>`)
+
+Structural accuracy, full catalog coverage, real sizing, and snug fit are complete and
+**headless-verified** (24/24 combos non-degenerate and distinct; sizing matches charts). `tsc
+--noEmit` clean on both files.
+
+**Caveat — live visual QA still pending:** the WebGL render could not be run in this environment, so
+the *material look* (sparkle/fire intensity, metal hotspot, pavé read at scale) and on-finger fit were
+verified by math/geometry, not by eye. Confirm in-browser across the 24 combos and on ≥2 fingers
+(index + pinky). Anything that still looks off after that goes to **Milestone 3**, candidates:
+metal specular hotspot tightness vs HDRI, prong/pavé close-up fidelity, three-stone bridge styling,
+and per-shape prong placement for non-round corners.
 
 ## Architecture Overview
 
