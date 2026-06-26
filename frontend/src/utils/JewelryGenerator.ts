@@ -183,9 +183,9 @@ export class JewelryGenerator {
     group.add(asm);
 
     if (withHalo) {
-      // Tight ring of accents hugging the centre girdle — little bare metal between stones.
-      const accentR = R * 0.26;
-      const orbit   = R + accentR * 0.95;                  // girdles nearly touching
+      // Tight ring of accents hugging the centre girdle — minimal bare metal between stones.
+      const accentR = R * 0.28;
+      const orbit   = R + accentR * 0.82;                  // pulled in so accents hug the girdle
       const halo = JewelryGenerator.createHalo(config, R, accentR, orbit, bandOuter);
       group.add(halo);
     }
@@ -496,8 +496,9 @@ export class JewelryGenerator {
     g.name = 'halo';
     const mat = JewelryGenerator.createDiamondMaterial(config);
 
-    // Accent count chosen so the small stones sit shoulder-to-shoulder around the orbit.
-    const count = Math.max(10, Math.round((2 * Math.PI * orbit) / (accentR * 2.05)));
+    // Accent count chosen so the small stones sit shoulder-to-shoulder around the orbit
+    // (spacing factor ~1.95 → near-touching melee, typically 14–20 stones).
+    const count = Math.max(14, Math.round((2 * Math.PI * orbit) / (accentR * 1.95)));
     const accent = JewelryGenerator.buildShape('round', accentR); // already table-facing +Z
     const girdleZ = bandOuter + JewelryGenerator.haloSeatDepth(centreR);
 
