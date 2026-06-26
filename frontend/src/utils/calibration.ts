@@ -730,11 +730,17 @@ export class HandCalibrator {
     const BASE_OF_FINGER_T = 0.55;
     const ringPosition = new THREE.Vector3().lerpVectors(mcpVec, pipVec, BASE_OF_FINGER_T);
 
-    // 2. SCALE — match ring diameter to the finger width. The divisor maps the band's
-    //    effective on-screen radius to the measured finger width in pixels. The band radius
-    //    (ringSize) is unchanged by the new faceted stone / claw geometry — only parts at +Z
-    //    grew — so the fit divisor stays 10.4; no recalibration needed.
-    const requiredScale = fingerWidthPx / 10.4;
+    // 2. SCALE — fit the band's INNER hole to the measured finger width like a real ring:
+    //    snug, with only a hair of clearance, not a loose loop with visible daylight.
+    //    Band geometry (from RingConfig in build3DRing): ringSize 8.5, bandWidth 2.5 →
+    //    inner diameter = 2 * (8.5 − 2.5/2) = 14.5 world units. The camera is set so 1 world
+    //    unit ≈ 1px at the tracking plane, so scaling the 14.5-unit hole to fingerWidthPx (× a
+    //    small clearance) seats the band on the finger. Scale is derived purely from the band
+    //    (which sets the fit) — independent of the stone/halo/prong parts, so adding the hidden
+    //    halo gallery etc. cannot loosen the fit.
+    const BAND_INNER_DIAMETER = 2 * (8.5 - 2.5 / 2); // 14.5 — keep in sync with build3DRing config
+    const FIT_CLEARANCE = 1.06;                      // ~6% clearance: snug like a worn ring
+    const requiredScale = (fingerWidthPx * FIT_CLEARANCE) / BAND_INNER_DIAMETER;
 
     // 3. ORIENTATION — align ring's local Y axis with the bone direction
     //    Ring geometry: hole axis = Y, stone at +Z.
