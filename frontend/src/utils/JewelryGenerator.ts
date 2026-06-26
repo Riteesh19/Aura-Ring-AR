@@ -150,9 +150,8 @@ export class JewelryGenerator {
     // 1. High-def shank.
     group.add(JewelryGenerator.createBand(config, ringRadius, tubeRadius));
 
-    // 2. Centre-stone radius from carat (1.00ct round ≈ 6.5mm diameter).
-    const cs = Math.cbrt(Math.max(config.stoneCarat, 0.05));
-    const R = 3.25 * cs;
+    // 2. Centre-stone HALF-WIDTH from real carat→mm size charts per shape (not a single factor).
+    const R = JewelryGenerator.halfWidthMm(config.stoneShape, config.stoneCarat);
 
     // 3. Assemble parts per SETTING TYPE — these are mechanically different rings.
     switch (config.settingType) {
@@ -228,15 +227,30 @@ export class JewelryGenerator {
 
   // ─── Stone spec dispatch ──────────────────────────────────────────────────────
 
+  /**
+   * Real per-shape HALF-WIDTH (mm) for a given carat, from standard diamond size charts.
+   * Linear dimension ∝ carat^(1/3). Values are the half of the SHORT axis (width); the long
+   * axis is produced by each cut's length:width stretch (see buildShape). For 1.00ct:
+   *   round 6.5mm dia · oval 5.7×7.7 · emerald 5.0×7.0 · princess 5.5² · cushion 6.0² · radiant 5.4×7.0
+   */
+  private static halfWidthMm(shape: StoneShape, carat: number): number {
+    const cs = Math.cbrt(Math.max(carat, 0.05));
+    const halfWidth1ct: Record<StoneShape, number> = {
+      round: 3.25, oval: 2.85, emerald: 2.50, princess: 2.75, cushion: 3.00, radiant: 2.70,
+    };
+    return (halfWidth1ct[shape] ?? 3.25) * cs;
+  }
+
   private static buildShape(shape: StoneShape, R: number): StoneSpec {
+    // R is the stone's HALF-WIDTH; per-cut length:width ratios produce the long axis.
     let spec: StoneSpec;
     switch (shape) {
-      case 'emerald':  spec = JewelryGenerator.buildEmeraldCut(R); break;
-      case 'princess': spec = JewelryGenerator.buildPrincessCut(R, 1.0); break;
-      case 'radiant':  spec = JewelryGenerator.buildPrincessCut(R, 1.3); break; // elongated rectangular brilliant
-      case 'cushion':  spec = JewelryGenerator.buildPrincessCut(R, 1.0, 0.32); break; // softened (rounder) corners
-      case 'oval':     spec = JewelryGenerator.buildRoundBrilliant(R, 1.5); break;
-      default:         spec = JewelryGenerator.buildRoundBrilliant(R, 1.0); break; // round
+      case 'emerald':  spec = JewelryGenerator.buildEmeraldCut(R); break;           // LW 1.40 (internal)
+      case 'princess': spec = JewelryGenerator.buildPrincessCut(R, 1.0); break;     // square
+      case 'radiant':  spec = JewelryGenerator.buildPrincessCut(R, 1.30); break;    // LW 1.30 rectangular brilliant
+      case 'cushion':  spec = JewelryGenerator.buildPrincessCut(R, 1.0, 0.32); break; // square, softened corners
+      case 'oval':     spec = JewelryGenerator.buildRoundBrilliant(R, 1.35); break; // LW 1.35
+      default:         spec = JewelryGenerator.buildRoundBrilliant(R, 1.0); break;  // round
     }
     // Rotate so the table (+Y) faces +Z (outward) and the culet points into the setting.
     spec.geometry.rotateX(Math.PI / 2);
@@ -406,10 +420,11 @@ export class JewelryGenerator {
     return { geometry: geo, radius: s * Math.max(1, stretch), depthTotal: crownH + girH + pavD, crownHeight: crownH, girdleThickness: girH, pavilionDepth: pavD };
   }
 
-  /** Emerald: rectangular step cut — concentric cut-corner frames stepping in crown & pavilion. */
+  /** Emerald: rectangular step cut — concentric cut-corner frames stepping in crown & pavilion.
+   *  R is the half-WIDTH; emerald length:width ≈ 1.40. */
   private static buildEmeraldCut(R: number): StoneSpec {
-    const hx   = 0.72 * R;        // narrow axis (across finger)
-    const hz   = 1.05 * R;        // long axis (along finger after rotation)
+    const hx   = R;              // narrow axis (across finger) = half-width
+    const hz   = 1.40 * R;       // long axis (along finger after rotation)
     const cut  = Math.min(hx, hz) * 0.2;
     const crownH = 0.18 * R;
     const pavD   = 0.85 * R;
