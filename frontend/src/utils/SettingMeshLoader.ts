@@ -32,8 +32,14 @@ export interface SettingMeshConfig {
    *  Empty array = swap ALL materials that aren't on a hidden stone node. */
   metalMaterialMatchers: string[];
 
-  /** Normalise the AI mesh into the engine convention: hole axis = local Y, table/front = +Z,
-   *  units ≈ mm, centred on the band centre. Read these off the inspected mesh once. */
+  /** Auto-fit: recenter the mesh's bbox to the origin and scale it so its largest dimension equals
+   *  `targetMaxDim` (≈ mm). AI outputs have arbitrary scale/centering, so this gets them in the
+   *  ballpark automatically; `normalize` below then fine-tunes (mainly ROTATION, which can't be
+   *  auto-derived). Set null to skip and rely entirely on `normalize`. */
+  autoFit: { targetMaxDim: number } | null;
+
+  /** Fine-tune on top of auto-fit: hole axis = local Y, table/front = +Z. Mainly the rotation to
+   *  orient the AI mesh (band plane in XZ, front toward +Z). Read off the inspected mesh once. */
   normalize: { rotationEuler: [number, number, number]; scale: number; translate: [number, number, number] };
 
   /** Where the procedural diamond seats inside the normalised setting (girdle-centre position). */
@@ -49,7 +55,8 @@ export const SETTING_MESH_CONFIGS: Record<string, SettingMeshConfig> = {
     key: 'solitaire', url: '/setting-models/solitaire.glb', enabled: false,
     stoneNodeMatchers: ['stone', 'diamond', 'gem', 'center', 'centre'],
     metalMaterialMatchers: [], // TODO: name the metal material(s) after inspection (empty = swap all)
-    normalize: { rotationEuler: [0, 0, 0], scale: 1, translate: [0, 0, 0] }, // TODO calibrate
+    autoFit: { targetMaxDim: 22 }, // ≈ mm largest extent; tune per design after inspection
+    normalize: { rotationEuler: [0, 0, 0], scale: 1, translate: [0, 0, 0] }, // TODO calibrate rotation
     diamondAnchor: { position: [0, 0, 0] },                                   // TODO calibrate
     occlusion: { radius: 7.8, length: 11 },                                   // TODO calibrate to band hole
   },
@@ -57,6 +64,7 @@ export const SETTING_MESH_CONFIGS: Record<string, SettingMeshConfig> = {
     key: 'halo', url: '/setting-models/halo.glb', enabled: false,
     stoneNodeMatchers: ['stone', 'diamond', 'gem', 'center', 'centre'],
     metalMaterialMatchers: [],
+    autoFit: { targetMaxDim: 22 }, // ≈ mm largest extent; tune per design after inspection
     normalize: { rotationEuler: [0, 0, 0], scale: 1, translate: [0, 0, 0] },
     diamondAnchor: { position: [0, 0, 0] },
     occlusion: { radius: 7.8, length: 11 },
@@ -65,6 +73,7 @@ export const SETTING_MESH_CONFIGS: Record<string, SettingMeshConfig> = {
     key: 'hidden_halo', url: '/setting-models/hidden-halo.glb', enabled: false,
     stoneNodeMatchers: ['stone', 'diamond', 'gem', 'center', 'centre'],
     metalMaterialMatchers: [],
+    autoFit: { targetMaxDim: 22 }, // ≈ mm largest extent; tune per design after inspection
     normalize: { rotationEuler: [0, 0, 0], scale: 1, translate: [0, 0, 0] },
     diamondAnchor: { position: [0, 0, 0] },
     occlusion: { radius: 7.8, length: 11 },
@@ -73,6 +82,7 @@ export const SETTING_MESH_CONFIGS: Record<string, SettingMeshConfig> = {
     key: 'three_stone', url: '/setting-models/three-stone.glb', enabled: false,
     stoneNodeMatchers: ['stone', 'diamond', 'gem', 'center', 'centre'],
     metalMaterialMatchers: [],
+    autoFit: { targetMaxDim: 22 }, // ≈ mm largest extent; tune per design after inspection
     normalize: { rotationEuler: [0, 0, 0], scale: 1, translate: [0, 0, 0] },
     diamondAnchor: { position: [0, 0, 0] },
     occlusion: { radius: 7.8, length: 11 },
@@ -145,17 +155,31 @@ function isStoneNode(o: any, cfg: SettingMeshConfig): boolean {
 export function assembleSetting(scene: THREE.Group, cfg: SettingMeshConfig, metalMat: THREE.Material): THREE.Group {
   scene.traverse((o: any) => {
     if (!o.isMesh) return;
-    if (isStoneNode(o, cfg)) { o.visible = false; return; }       // drop baked stone
+    if (isStoneNode(o, cfg)) { o.visible = false; return; }       // drop baked stone (if separable)
     const matName = o.material ? (Array.isArray(o.material) ? o.material[0]?.name : o.material.name) || '' : '';
     const isMetal = cfg.metalMaterialMatchers.length === 0 || nameMatches(matName, cfg.metalMaterialMatchers);
     if (isMetal) o.material = metalMat;                            // recolour to selected metal
   });
 
+  // AUTO-FIT: AI outputs have arbitrary scale/centering. Recenter the bbox to the origin and scale
+  // so the largest extent ≈ targetMaxDim (mm). With Object3D's S-then-T compose (final = s·v + pos),
+  // recentring while scaling means pos = -centre·s.
+  if (cfg.autoFit) {
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3(); box.getSize(size);
+    const centre = new THREE.Vector3(); box.getCenter(centre);
+    const maxDim = Math.max(size.x, size.y, size.z) || 1;
+    const s = cfg.autoFit.targetMaxDim / maxDim;
+    scene.scale.setScalar(s);
+    scene.position.copy(centre).multiplyScalar(-s);
+  }
+
+  // Fine-tune (mainly rotation) goes on the wrap so it pivots about the recentred origin.
   const wrap = new THREE.Group();
   wrap.name = `setting-mesh-${cfg.key}`;
-  scene.rotation.set(cfg.normalize.rotationEuler[0], cfg.normalize.rotationEuler[1], cfg.normalize.rotationEuler[2]);
-  scene.scale.setScalar(cfg.normalize.scale);
-  scene.position.set(cfg.normalize.translate[0], cfg.normalize.translate[1], cfg.normalize.translate[2]);
+  wrap.rotation.set(cfg.normalize.rotationEuler[0], cfg.normalize.rotationEuler[1], cfg.normalize.rotationEuler[2]);
+  wrap.scale.setScalar(cfg.normalize.scale);
+  wrap.position.set(cfg.normalize.translate[0], cfg.normalize.translate[1], cfg.normalize.translate[2]);
   wrap.add(scene);
   return wrap;
 }
