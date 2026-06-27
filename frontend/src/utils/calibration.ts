@@ -411,9 +411,16 @@ export class HandCalibrator {
     // --- Generate the ring assembly (includes occlusion cylinder) ---
     // Geometry is built ONLY here, on a config change — never inside the per-frame loop.
     // scene.environment is created once in initThreeJS(), so nothing to rebuild here.
-    this.ringGroup = JewelryGenerator.generateRing(config);
-    this.ringGroup.visible = false;
-    this.scene.add(this.ringGroup);
+    try {
+      this.ringGroup = JewelryGenerator.generateRing(config);
+      this.ringGroup.visible = false;
+      this.scene.add(this.ringGroup);
+    } catch (e) {
+      // Surface a geometry build failure instead of leaving ringGroup null (silent no-render).
+      // eslint-disable-next-line no-console
+      console.error('[build3DRing] generateRing failed for config', config, e);
+      this.ringGroup = null;
+    }
   }
 
   /**
@@ -544,29 +551,36 @@ export class HandCalibrator {
 
     const state = appState.arFsmState;
 
-    if (state === 'SIZING') {
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        this.currentLandmarks = results.multiHandLandmarks[0];
-        this.drawHandOverlay(this.currentLandmarks);
-        if (this.detectedScale) {
-          this.calculateRingSize(this.currentLandmarks);
+    // MediaPipe swallows exceptions thrown in this callback, which would make the ring vanish
+    // with no visible error. Wrap so any render/geometry fault is logged instead of silent.
+    try {
+      if (state === 'SIZING') {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          this.currentLandmarks = results.multiHandLandmarks[0];
+          this.drawHandOverlay(this.currentLandmarks);
+          if (this.detectedScale) {
+            this.calculateRingSize(this.currentLandmarks);
+          }
+        } else {
+          this.currentLandmarks = [];
         }
-      } else {
-        this.currentLandmarks = [];
-      }
-      if (this.ringGroup) this.ringGroup.visible = false;
-      if (this.contactShadow) this.contactShadow.visible = false;
-    } else if (state === 'TRY_ON') {
-      // Match scene exposure to the room (throttled internally to ~1/30 frames).
-      this.sampleWebcamAmbient();
-      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        this.currentLandmarks = results.multiHandLandmarks[0];
-        this.renderTryOnMode(this.currentLandmarks);
-      } else {
-        this.currentLandmarks = [];
         if (this.ringGroup) this.ringGroup.visible = false;
         if (this.contactShadow) this.contactShadow.visible = false;
+      } else if (state === 'TRY_ON') {
+        // Match scene exposure to the room (throttled internally to ~1/30 frames).
+        this.sampleWebcamAmbient();
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          this.currentLandmarks = results.multiHandLandmarks[0];
+          this.renderTryOnMode(this.currentLandmarks);
+        } else {
+          this.currentLandmarks = [];
+          if (this.ringGroup) this.ringGroup.visible = false;
+          if (this.contactShadow) this.contactShadow.visible = false;
+        }
       }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[AR onHandResults] render error in state', state, e);
     }
 
     // Render the 3D scene on top
