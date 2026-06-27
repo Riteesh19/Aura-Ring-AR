@@ -33,10 +33,11 @@ export interface SettingSpec {
 export const DESIGN_SPECS: Record<string, SettingSpec> = {
   // solitaire.png — plain polished half-round band, open 4-prong box-basket, no accents, no milgrain.
   solitaire:   { key: 'solitaire',   prongCount: 4, prongStyle: 'claw',  sideStones: 0, sideStoneScale: 0,    halo: 'none',    haloRows: 0, accentScale: 0,    meleeCount: 0,  meleeSpacing: 1.95, paveRows: 0, hasMilgrain: false, ridgeStyle: 'none', gallery: 'open_basket' },
-  // halo.png — single tight melee ring (~22) with a BEADED MILGRAIN edge; split-shoulder pavé (2 rows).
-  halo:        { key: 'halo',        prongCount: 4, prongStyle: 'claw',  sideStones: 0, sideStoneScale: 0,    halo: 'visible', haloRows: 1, accentScale: 0.26, meleeCount: 22, meleeSpacing: 1.85, paveRows: 2, hasMilgrain: true,  ridgeStyle: 'none', gallery: 'rail' },
-  // hidden_halo.png — under-basket melee ring (~18), single pavé shoulder row, cross prongs, no milgrain.
-  hidden_halo: { key: 'hidden_halo', prongCount: 4, prongStyle: 'cross', sideStones: 0, sideStoneScale: 0,    halo: 'hidden',  haloRows: 1, accentScale: 0.18, meleeCount: 18, meleeSpacing: 1.85, paveRows: 1, hasMilgrain: false, ridgeStyle: 'none', gallery: 'rail' },
+  // halo.png — the photo shows ~22 melee, but at AR scale that fuses into a grey ring, so we use
+  // FEWER, LARGER accents (12) that read as distinct sparkle points (legibility tradeoff). Milgrain rim.
+  halo:        { key: 'halo',        prongCount: 4, prongStyle: 'claw',  sideStones: 0, sideStoneScale: 0,    halo: 'visible', haloRows: 1, accentScale: 0.34, meleeCount: 12, meleeSpacing: 2.1,  paveRows: 2, hasMilgrain: true,  ridgeStyle: 'none', gallery: 'rail' },
+  // hidden_halo.png — under-basket halo; ~18 in the photo → 10 larger sparkle points at AR scale.
+  hidden_halo: { key: 'hidden_halo', prongCount: 4, prongStyle: 'cross', sideStones: 0, sideStoneScale: 0,    halo: 'hidden',  haloRows: 1, accentScale: 0.26, meleeCount: 10, meleeSpacing: 2.1,  paveRows: 1, hasMilgrain: false, ridgeStyle: 'none', gallery: 'rail' },
   // threestone.png — centre + two flanking stones, single pavé shoulder row, cross prongs, no milgrain.
   three_stone: { key: 'three_stone', prongCount: 4, prongStyle: 'cross', sideStones: 2, sideStoneScale: 0.60, halo: 'none',    haloRows: 0, accentScale: 0,    meleeCount: 0,  meleeSpacing: 1.95, paveRows: 1, hasMilgrain: false, ridgeStyle: 'none', gallery: 'rail' },
 };

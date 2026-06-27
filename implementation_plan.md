@@ -125,6 +125,30 @@ box-basket. **`ridgeStyle` is `'none'` for all four** — none of the photos sho
 is rendered (resolution, not invention). Headless-verified: melee counts match specs exactly (halo 22,
 hidden 18), milgrain appears **only** on halo (2 rings / 183 beads) and nowhere else.
 
+#### Legibility-at-AR-scale pass (post-close fidelity tradeoffs)
+
+A ring on a webcam hand occupies only a few dozen pixels; detail tuned in isolated macro renders
+collapsed into a "foggy grey blob / rod-on-a-blob". Fixed for readability at actual scale, with
+**explicit, deliberate trades of physical fidelity for legibility** (all called out here, not silent):
+
+- **Diamond** — `transmission 1.0 → 0.6`, `envMapIntensity 3.5 → 5.0`, `reflectivity 1.0`,
+  `roughness → 0.01`. A pure-transmission stone reads as grey fog with nothing behind it to refract;
+  leaning to bright facet *reflection* makes it a crisp sparkly gem at small scale. (Less "correct" macro.)
+- **Metal** — `envMapIntensity 2.5 → 3.4` so the band silhouette reads bright against skin, not a dim rod.
+- **Milgrain** — the ~180-bead row aliases into shimmer at scale → replaced with a single slim bright
+  **torus rim** per edge (reads as the defined halo edge milgrain communicates, without the noise).
+- **Halo melee** — photo shows ~22 (halo) / ~18 (hidden); at AR scale they fuse into a ring of mush, so
+  **fewer, larger** accents (12 / 10) that read as distinct sparkle points. Spec comments note the photo counts.
+- **Lighting** — added a sharp camera-attached headlight (`PointLight`) for tight specular glints so parts
+  read as separable shiny surfaces, not a uniform soft-lit disc.
+- **Tracking smoothing** — EMA on position/scale + slerp on rotation (factor 0.45), reset on hand-loss, so
+  the silhouette holds stable/sharp as the hand moves instead of smearing from per-frame landmark jitter.
+- AA confirmed (`antialias: true`, pixel ratio capped at devicePixelRatio≤2).
+
+**Not verified live** — these are principled changes; the in-webcam result at scale still needs the
+user's visual confirmation across 2–3 configs (this remains the standing visual-QA gap). Candidate
+**Milestone 3** if any config still reads as mush after live testing.
+
 ### Milestone 2 — CLOSE (tag `milestone-2`)
 
 Structural accuracy, full catalog coverage, real sizing, and snug fit are complete and

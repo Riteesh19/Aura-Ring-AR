@@ -64,6 +64,11 @@ export class HandCalibrator {
   private contactShadow: THREE.Sprite | null = null;     // soft grounding shadow under the band
   private ambientSampleCounter: number = 0;              // throttle webcam exposure matching
   private baseExposure: number = 1.05;                   // studio exposure before room matching
+  // Frame-to-frame smoothing of the rendered pose so the ring holds a stable, sharp silhouette
+  // as the hand moves (raw per-frame landmarks jitter, which smears the small AR object).
+  private smoothedRingPos: THREE.Vector3 | null = null;
+  private smoothedQuat: THREE.Quaternion | null = null;
+  private smoothedScale: number | null = null;
 
   // Custom Ring Builder Selection State (Brilliant Earth / Rare Carat Style)
   public selectedMetal: string = 'yellow-gold';
@@ -209,12 +214,17 @@ export class HandCalibrator {
     // to scene.environment ONCE so every PBR material reflects it (envMapIntensity per material).
     this.scene.environment = this.createStudioEnvironment();
 
-    // A couple of soft direct lights only to lift shadow detail; the env map is the key light.
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
+    // A couple of soft direct lights to lift shadow detail; the env map is the key light.
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.22);
     this.scene.add(ambientLight);
-    const keyLight = new THREE.DirectionalLight(0xfff5e6, 1.2);
+    const keyLight = new THREE.DirectionalLight(0xfff5e6, 1.4);
     keyLight.position.set(5, 10, 7);
     this.scene.add(keyLight);
+    // Sharp camera-attached headlight (legibility): a small, bright source from the viewer's
+    // direction throws tight specular glints on metal and the diamond facets, so the assembly
+    // reads as separable shiny parts rather than a uniform soft-lit grey disc at webcam scale.
+    const headlight = new THREE.PointLight(0xffffff, 2.2, 0, 1.5);
+    this.camera3D.add(headlight);
     this.scene.add(this.camera3D);
 
     // Soft contact shadow sprite — a camera-facing dark radial disc that darkens the webcam
@@ -576,6 +586,8 @@ export class HandCalibrator {
           this.currentLandmarks = [];
           if (this.ringGroup) this.ringGroup.visible = false;
           if (this.contactShadow) this.contactShadow.visible = false;
+          // Drop smoothing state so the ring re-acquires cleanly (no smear from the old pose).
+          this.smoothedRingPos = null; this.smoothedQuat = null; this.smoothedScale = null;
         }
       }
     } catch (e) {
@@ -780,18 +792,30 @@ export class HandCalibrator {
     const zAxis = new THREE.Vector3().crossVectors(xAxis, yAxis).normalize();
 
     const rotMatrix = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis);
-    this.ringGroup.quaternion.setFromRotationMatrix(rotMatrix);
+    const targetQuat = new THREE.Quaternion().setFromRotationMatrix(rotMatrix);
 
-    // Apply transforms
-    this.ringGroup.position.copy(ringPosition);
-    this.ringGroup.scale.setScalar(requiredScale);
+    // SMOOTH the pose frame-to-frame (EMA on position/scale, slerp on rotation) so raw landmark
+    // jitter doesn't smear the small AR object. ~0.45 keeps it responsive but holds a sharp,
+    // stable silhouette as the hand moves at normal speed.
+    const S = 0.45;
+    if (!this.smoothedRingPos)  this.smoothedRingPos = ringPosition.clone();
+    else this.smoothedRingPos.lerp(ringPosition, S);
+    if (!this.smoothedQuat)     this.smoothedQuat = targetQuat.clone();
+    else this.smoothedQuat.slerp(targetQuat, S);
+    if (this.smoothedScale == null) this.smoothedScale = requiredScale;
+    else this.smoothedScale += (requiredScale - this.smoothedScale) * S;
+
+    // Apply smoothed transforms
+    this.ringGroup.quaternion.copy(this.smoothedQuat);
+    this.ringGroup.position.copy(this.smoothedRingPos);
+    this.ringGroup.scale.setScalar(this.smoothedScale);
     this.ringGroup.visible = true;
 
     // Ground the ring with the soft contact shadow: sit it at the band, sized to the band
     // outer diameter, faded to a subtle opacity. It darkens the webcam pixels behind the ring.
     if (this.contactShadow) {
-      this.contactShadow.position.copy(ringPosition);
-      const shadowSize = requiredScale * 26; // ≈ band outer diameter in world units
+      this.contactShadow.position.copy(this.smoothedRingPos);
+      const shadowSize = this.smoothedScale * 26; // ≈ band outer diameter in world units
       this.contactShadow.scale.set(shadowSize, shadowSize * 0.7, 1);
       (this.contactShadow.material as THREE.SpriteMaterial).opacity = 0.35;
       this.contactShadow.visible = true;

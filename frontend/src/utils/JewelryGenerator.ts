@@ -329,7 +329,9 @@ export class JewelryGenerator {
       roughness: brushed ? 0.3 : 0.04,         // satin micro-roughness vs mirror polish
       clearcoat: brushed ? 0.0 : 1.0,
       clearcoatRoughness: 0.05,
-      envMapIntensity: 2.5,                     // force heavy environment reflection
+      // ↑ envMap reflection (legibility): a brighter, higher-contrast band silhouette separates
+      // the ring from skin at webcam scale instead of reading as a dim grey rod.
+      envMapIntensity: 3.4,
       flatShading: false,
     });
     if (brushed) {
@@ -345,25 +347,28 @@ export class JewelryGenerator {
 
   private static createDiamondMaterial(config: RingConfig): THREE.MeshPhysicalMaterial {
     const cs = Math.cbrt(Math.max(config.stoneCarat, 0.05));
+    // LEGIBILITY TRADEOFF (AR scale): a physically pure transmission:1.0 diamond reads as a
+    // foggy grey blob when it's only ~30px on a webcam hand with nothing behind it to refract.
+    // We lean the stone toward bright FACET REFLECTION (lower transmission, higher envMap) so it
+    // reads as a crisp sparkly gem at small scale. Less physically "correct" up close, but the
+    // whole point is reading as a diamond on a hand, not a studio macro shot.
     return new THREE.MeshPhysicalMaterial({
       color: 0xffffff,
       metalness: 0.0,
-      roughness: 0.015,
-      transmission: 1.0,
-      ior: config.stoneIor ?? 2.417,            // diamond; configurable per stone type
-      thickness: 4.0 * cs,                      // table→culet depth in mm → real refraction
-      // Colourless/icy read: a near-neutral interior (very faint cool, never warm) over a long
-      // attenuation distance so the tint stays negligible. Swap to a warm/fancy colour only when
-      // a fancy-colour stone is explicitly selected (future stoneColor config).
+      roughness: 0.01,                          // sharp, mirror-like facet glints (not soft sheen)
+      transmission: 0.6,                        // ↓ from 1.0 — reflection dominates → bright, not foggy
+      ior: config.stoneIor ?? 2.417,
+      thickness: 3.0 * cs,
       attenuationColor: new THREE.Color(0xfbfdff),
       attenuationDistance: 14.0 * cs,
-      dispersion: 0.02,                         // subtle "fire" — occasional facet flashes, not a constant rainbow tint
+      dispersion: 0.02,
       transparent: true,
       clearcoat: 1.0,
       clearcoatRoughness: 0.0,
-      envMapIntensity: 3.5,                     // catch maximum HDRI sparkle
-      flatShading: true,                        // per-facet shading = crisp sparkle
-      side: THREE.DoubleSide,                   // robust against per-facet winding for refraction
+      envMapIntensity: 5.0,                      // ↑ catch bright HDRI sources → high-contrast sparkle
+      reflectivity: 1.0,
+      flatShading: true,                         // per-facet shading = crisp, separable glints
+      side: THREE.DoubleSide,
       specularIntensity: 1.0,
       specularColor: new THREE.Color(0xffffff),
     });
@@ -622,8 +627,11 @@ export class JewelryGenerator {
   }
 
   /**
-   * Milgrain — a continuous row of tiny metal beads along an edge circle. Used only where the
-   * reference photo shows it (the halo design's rim). Bead count is derived so beads just touch.
+   * Milgrain — the beaded edge along the halo rim. LEGIBILITY TRADEOFF (AR scale): a true row of
+   * ~180 tiny beads aliases into noise at the few-dozen pixels the ring occupies on a webcam hand,
+   * so instead of individual beads we render a single slim, bright metal torus rim. It reads as a
+   * crisp defined edge around the halo (which is what milgrain communicates at a glance) without
+   * the high-frequency shimmer. At true macro zoom this would want the bead row back.
    */
   private static createMilgrain(
     config: RingConfig, radius: number, z: number, beadR: number
@@ -631,14 +639,9 @@ export class JewelryGenerator {
     const g = new THREE.Group();
     g.name = 'milgrain';
     const metal = JewelryGenerator.createMetalMaterial(config);
-    const beadGeo = new THREE.SphereGeometry(beadR, 8, 6);
-    const count = Math.max(24, Math.round((2 * Math.PI * radius) / (beadR * 2.0)));
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2;
-      const bead = new THREE.Mesh(beadGeo, metal);
-      bead.position.set(Math.cos(a) * radius, Math.sin(a) * radius, z);
-      g.add(bead);
-    }
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(radius, beadR * 0.9, 8, 64), metal);
+    rim.position.set(0, 0, z);
+    g.add(rim);
     return g;
   }
 
