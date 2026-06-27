@@ -106,6 +106,25 @@ made **per-SKU-override-ready**.
 32 accents/12 pavé); two identical specs render **identically**. So the fields genuinely drive the
 geometry, and real per-SKU data will diverge automatically the moment the catalog carries it.
 
+#### Fine-detail pass — render what each reference photo actually shows
+
+Extended `SettingSpec` with detail fields (`prongStyle`, `meleeCount`, `meleeSpacing`, `hasMilgrain`,
+`ridgeStyle`, richer `gallery`), each **read off the design's own photo** — no invented detail:
+
+| design | band | milgrain | melee | prongs | gallery |
+| --- | --- | --- | --- | --- | --- |
+| solitaire | plain half-round (no ridges) | no | 0 | 4 claw | open box-basket (crossed bars) |
+| halo | split-shoulder pavé | **yes — beaded rim** | **22** flush, single ring | 4 claw | rail |
+| hidden_halo | single-row pavé | no | 18 under-basket | 4 cross-claw | rail |
+| three_stone | single-row pavé | no | 0 (2 side stones) | 4 cross + 3-claw sides | rail |
+
+New geometry: `createMilgrain` (beaded edge, halo only), flush melee seating in `createHalo`
+(accent size capped so neighbours nearly touch at the photo's count), `prongStyle: 'cross'`
+(heavier claws reaching further over the crown), and crossed basket bars for the solitaire's open
+box-basket. **`ridgeStyle` is `'none'` for all four** — none of the photos show band fluting, so none
+is rendered (resolution, not invention). Headless-verified: melee counts match specs exactly (halo 22,
+hidden 18), milgrain appears **only** on halo (2 rings / 183 beads) and nowhere else.
+
 ### Milestone 2 — CLOSE (tag `milestone-2`)
 
 Structural accuracy, full catalog coverage, real sizing, and snug fit are complete and

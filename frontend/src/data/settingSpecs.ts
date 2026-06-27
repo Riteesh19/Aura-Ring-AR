@@ -15,25 +15,30 @@
 export interface SettingSpec {
   key: string;                              // design id (for debugging / change detection)
   prongCount: number;                       // centre-head claws
+  prongStyle: 'claw' | 'cross';             // 'cross' = heavier prongs meeting in an X over the crown
   sideStones: number;                       // 0 = none, 2 = three-stone flanks
   sideStoneScale: number;                   // side stone size relative to centre half-width
   halo: 'none' | 'visible' | 'hidden';      // accent ring style around the centre
   haloRows: number;                         // 1 = single, 2 = double concentric halo (visible only)
-  accentScale: number;                      // halo accent half-width relative to centre
+  accentScale: number;                      // halo accent half-width relative to centre (melee size)
+  meleeCount: number;                       // explicit halo accent count from the photo; 0 = auto
+  meleeSpacing: number;                     // centre-to-centre spacing factor (× accent dia); lower = tighter
   paveRows: number;                         // 0 / 1 / 2 rows of shoulder pavé melee
-  gallery: 'plain' | 'rail';                // under-stone gallery treatment
+  hasMilgrain: boolean;                     // beaded edge along the halo rim (only where the photo shows it)
+  ridgeStyle: 'none';                       // band fluting — NONE of the 4 photos show any, so 'none'
+  gallery: 'open_basket' | 'rail';          // under-stone gallery treatment
 }
 
-/** One spec per distinct catalog DESIGN, derived from public/settings/<key>.png. */
+/** One spec per distinct catalog DESIGN, fine detail read directly off public/settings/<key>.png. */
 export const DESIGN_SPECS: Record<string, SettingSpec> = {
-  // solitaire.png — plain band, 4-prong basket, no accents anywhere.
-  solitaire:   { key: 'solitaire',   prongCount: 4, sideStones: 0, sideStoneScale: 0,    halo: 'none',    haloRows: 0, accentScale: 0,    paveRows: 0, gallery: 'rail' },
-  // halo.png — bold single accent ring at the girdle; split-shoulder pavé (two rows).
-  halo:        { key: 'halo',        prongCount: 4, sideStones: 0, sideStoneScale: 0,    halo: 'visible', haloRows: 1, accentScale: 0.28, paveRows: 2, gallery: 'rail' },
-  // hidden_halo.png — accents under the basket (hidden from top); single pavé shoulder row.
-  hidden_halo: { key: 'hidden_halo', prongCount: 4, sideStones: 0, sideStoneScale: 0,    halo: 'hidden',  haloRows: 1, accentScale: 0.20, paveRows: 1, gallery: 'rail' },
-  // threestone.png — centre + two smaller flanking stones; single pavé shoulder row.
-  three_stone: { key: 'three_stone', prongCount: 4, sideStones: 2, sideStoneScale: 0.60, halo: 'none',    haloRows: 0, accentScale: 0,    paveRows: 1, gallery: 'rail' },
+  // solitaire.png — plain polished half-round band, open 4-prong box-basket, no accents, no milgrain.
+  solitaire:   { key: 'solitaire',   prongCount: 4, prongStyle: 'claw',  sideStones: 0, sideStoneScale: 0,    halo: 'none',    haloRows: 0, accentScale: 0,    meleeCount: 0,  meleeSpacing: 1.95, paveRows: 0, hasMilgrain: false, ridgeStyle: 'none', gallery: 'open_basket' },
+  // halo.png — single tight melee ring (~22) with a BEADED MILGRAIN edge; split-shoulder pavé (2 rows).
+  halo:        { key: 'halo',        prongCount: 4, prongStyle: 'claw',  sideStones: 0, sideStoneScale: 0,    halo: 'visible', haloRows: 1, accentScale: 0.26, meleeCount: 22, meleeSpacing: 1.85, paveRows: 2, hasMilgrain: true,  ridgeStyle: 'none', gallery: 'rail' },
+  // hidden_halo.png — under-basket melee ring (~18), single pavé shoulder row, cross prongs, no milgrain.
+  hidden_halo: { key: 'hidden_halo', prongCount: 4, prongStyle: 'cross', sideStones: 0, sideStoneScale: 0,    halo: 'hidden',  haloRows: 1, accentScale: 0.18, meleeCount: 18, meleeSpacing: 1.85, paveRows: 1, hasMilgrain: false, ridgeStyle: 'none', gallery: 'rail' },
+  // threestone.png — centre + two flanking stones, single pavé shoulder row, cross prongs, no milgrain.
+  three_stone: { key: 'three_stone', prongCount: 4, prongStyle: 'cross', sideStones: 2, sideStoneScale: 0.60, halo: 'none',    haloRows: 0, accentScale: 0,    meleeCount: 0,  meleeSpacing: 1.95, paveRows: 1, hasMilgrain: false, ridgeStyle: 'none', gallery: 'rail' },
 };
 
 /** Normalise a catalog `style` string ("Hidden Halo", "Three Stone", …) to a design key. */

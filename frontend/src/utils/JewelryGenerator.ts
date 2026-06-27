@@ -183,25 +183,30 @@ export class JewelryGenerator {
   private static buildCentreCluster(ctx: AssemblyCtx): void {
     const { group, config, R, bandOuter, ringRadius, tubeRadius, spec } = ctx;
     const stone = JewelryGenerator.buildShape(config.stoneShape, R);
-    const asm = JewelryGenerator.createStoneAssembly(config, stone, R, spec.prongCount);
+    const asm = JewelryGenerator.createStoneAssembly(config, stone, R, spec.prongCount, spec.prongStyle, spec.gallery);
     const girdleZ = bandOuter + stone.pavilionDepth;       // world z of the centre girdle plane
     asm.position.set(0, 0, girdleZ);                       // culet rests on the band
     group.add(asm);
 
     if (spec.halo === 'visible') {
-      // Flat accent ring(s) level with the girdle. haloRows=2 adds a second, larger concentric
-      // ring → a chunkier double halo that reads differently from a single-row design.
+      // Flat accent ring(s) level with the girdle, flush at the photo's melee count.
       const accentR = R * spec.accentScale;
       for (let row = 0; row < Math.max(1, spec.haloRows); row++) {
         const orbit = R + accentR * (0.82 + row * 1.7);    // each row sits one accent further out
-        group.add(JewelryGenerator.createHalo(config, accentR, orbit, girdleZ, /*tiltDeg*/ 0));
+        group.add(JewelryGenerator.createHalo(config, accentR, orbit, girdleZ, /*tiltDeg*/ 0, spec.meleeCount, spec.meleeSpacing));
+        // Beaded milgrain edge around the halo rim — only where the photo shows it.
+        if (spec.hasMilgrain) {
+          const beadR = accentR * 0.16;
+          group.add(JewelryGenerator.createMilgrain(config, orbit + accentR + beadR, girdleZ - beadR * 0.5, beadR)); // outer rim
+          group.add(JewelryGenerator.createMilgrain(config, orbit - accentR - beadR, girdleZ - beadR * 0.5, beadR)); // inner rim
+        }
       }
     } else if (spec.halo === 'hidden') {
       // Accents tucked UNDER the crown (below the girdle, tilted outward) — hidden from top.
       const accentR = R * spec.accentScale;
       const orbit   = R * 0.92;
       const seatZ   = girdleZ - stone.pavilionDepth * 0.45;
-      group.add(JewelryGenerator.createHalo(config, accentR, orbit, seatZ, /*tiltDeg*/ 55));
+      group.add(JewelryGenerator.createHalo(config, accentR, orbit, seatZ, /*tiltDeg*/ 55, spec.meleeCount, spec.meleeSpacing));
     }
     if (spec.paveRows > 0) {
       JewelryGenerator.addShoulderPave(group, config, ringRadius, tubeRadius, spec.paveRows);
@@ -217,14 +222,15 @@ export class JewelryGenerator {
     const specS1 = JewelryGenerator.buildShape(config.stoneShape, sideR);
     const specS2 = JewelryGenerator.buildShape(config.stoneShape, sideR);
 
-    const centre = JewelryGenerator.createStoneAssembly(config, specC, R, spec.prongCount);
+    const centre = JewelryGenerator.createStoneAssembly(config, specC, R, spec.prongCount, spec.prongStyle, spec.gallery);
     centre.position.set(0, 0, bandOuter + specC.pavilionDepth);
     group.add(centre);
 
     // A small visible gap of metal between adjacent stones (girdles do not touch).
     const gap = R + sideR + R * 0.30;
-    const left  = JewelryGenerator.createStoneAssembly(config, specS1, sideR, spec.prongCount);
-    const right = JewelryGenerator.createStoneAssembly(config, specS2, sideR, spec.prongCount);
+    // Side stones are prong-set like the photo (3 claws each), not haloed.
+    const left  = JewelryGenerator.createStoneAssembly(config, specS1, sideR, 3, spec.prongStyle, spec.gallery);
+    const right = JewelryGenerator.createStoneAssembly(config, specS2, sideR, 3, spec.prongStyle, spec.gallery);
     left.position.set(0,  gap, bandOuter + specS1.pavilionDepth);
     right.position.set(0, -gap, bandOuter + specS2.pavilionDepth);
     group.add(left, right);
@@ -511,7 +517,10 @@ export class JewelryGenerator {
   //  culet points to −Z (toward the band). Caller positions it on the band so the culet
   //  rests at bandOuter. The same assembly is reused for centre and side stones.
 
-  private static createStoneAssembly(config: RingConfig, spec: StoneSpec, R: number, prongCount = 4): THREE.Group {
+  private static createStoneAssembly(
+    config: RingConfig, spec: StoneSpec, R: number,
+    prongCount = 4, prongStyle: 'claw' | 'cross' = 'claw', gallery: 'open_basket' | 'rail' = 'rail'
+  ): THREE.Group {
     const g = new THREE.Group();
     g.name = 'stone-assembly';
     const metal = JewelryGenerator.createMetalMaterial(config);
@@ -521,25 +530,38 @@ export class JewelryGenerator {
     stone.name = 'stone';
     g.add(stone);
 
-    // Slim basket: a single thin rail just under the girdle (reads as a setting, not a disc).
+    // Gallery: a slim rail under the girdle, plus crossed basket bars for an open box-basket.
     const railTube = Math.max(0.07, R * 0.045);
     const rail = new THREE.Mesh(new THREE.TorusGeometry(R * 0.74, railTube, 10, 32), metal);
     rail.position.set(0, 0, -spec.pavilionDepth * 0.42);
     rail.name = 'basket-rail';
     g.add(rail);
+    if (gallery === 'open_basket') {
+      // Two crossed bars spanning the rail → the open box-basket seen in the solitaire photo.
+      const barGeo = new THREE.CylinderGeometry(railTube, railTube, R * 1.48, 8);
+      for (const ang of [0, Math.PI / 2]) {
+        const bar = new THREE.Mesh(barGeo, metal);
+        bar.rotation.z = Math.PI / 2;           // lay the cylinder horizontal (across the basket)
+        bar.rotation.y = ang;
+        bar.position.set(0, 0, -spec.pavilionDepth * 0.42);
+        g.add(bar);
+      }
+    }
 
     // SHORT claw prongs that barely clear the crown and curl inward — not long needles.
+    // 'cross' prongs are heavier and reach a touch further over the crown (the X-grip look).
     const count   = Math.max(3, prongCount);
-    const prongR  = Math.max(0.12, R * 0.10);
+    const heavy   = prongStyle === 'cross';
+    const prongR  = Math.max(0.12, R * (heavy ? 0.13 : 0.10));
     // Total prong length ≈ crown height + a touch — short and unobtrusive.
-    const L       = spec.crownHeight + spec.girdleThickness + R * 0.12;
-    const tilt    = 0.30; // radians of inward lean so the tip curls over the crown
+    const L       = spec.crownHeight + spec.girdleThickness + R * (heavy ? 0.20 : 0.12);
+    const tilt    = heavy ? 0.40 : 0.30; // inward lean so the tip curls over the crown
     const shaftGeo = new THREE.CylinderGeometry(prongR * 0.5, prongR, L, 10);
     const beadGeo  = new THREE.SphereGeometry(prongR * 1.05, 12, 10);
     const yAxis = new THREE.Vector3(0, 1, 0);
 
     for (let i = 0; i < count; i++) {
-      const a = Math.PI / 4 + (i / count) * Math.PI * 2; // diagonal placement
+      const a = Math.PI / 4 + (i / count) * Math.PI * 2; // diagonal placement → reads as an X
       const cos = Math.cos(a), sin = Math.sin(a);
       // Direction: mostly +Z (outward) leaning inward (−radial) so claws grip, not splay.
       const dir = new THREE.Vector3(-cos * Math.sin(tilt), -sin * Math.sin(tilt), Math.cos(tilt)).normalize();
@@ -566,16 +588,21 @@ export class JewelryGenerator {
    *   tiltDeg > 0 → tables tilted outward (hidden halo: tucked under the crown, seen in profile).
    */
   private static createHalo(
-    config: RingConfig, accentR: number, orbit: number, seatZ: number, tiltDeg: number
+    config: RingConfig, accentR: number, orbit: number, seatZ: number, tiltDeg: number,
+    meleeCount = 0, meleeSpacing = 1.9
   ): THREE.Group {
     const g = new THREE.Group();
     g.name = 'halo';
     const mat = JewelryGenerator.createDiamondMaterial(config);
 
-    // Accent count chosen so the small stones sit shoulder-to-shoulder around the orbit
-    // (spacing factor ~1.95 → near-touching melee, typically 14–20 stones).
-    const count = Math.max(14, Math.round((2 * Math.PI * orbit) / (accentR * 1.95)));
-    const accent = JewelryGenerator.buildShape('round', accentR); // table faces +Z
+    // Use the photo's explicit melee count when given; otherwise pack flush by spacing factor.
+    const count = meleeCount > 0
+      ? meleeCount
+      : Math.max(14, Math.round((2 * Math.PI * orbit) / (accentR * meleeSpacing)));
+    // Seat the accents flush: size each stone so neighbours nearly touch at this count/orbit,
+    // leaving minimal bare metal between them (not placeholder stones with daylight around them).
+    const flushR = Math.min(accentR, (Math.PI * orbit) / count * 0.96);
+    const accent = JewelryGenerator.buildShape('round', flushR); // table faces +Z
     const tilt = (tiltDeg * Math.PI) / 180;
     const zUp = new THREE.Vector3(0, 0, 1);
 
@@ -590,6 +617,27 @@ export class JewelryGenerator {
         m.quaternion.setFromUnitVectors(zUp, dir);
       }
       g.add(m);
+    }
+    return g;
+  }
+
+  /**
+   * Milgrain — a continuous row of tiny metal beads along an edge circle. Used only where the
+   * reference photo shows it (the halo design's rim). Bead count is derived so beads just touch.
+   */
+  private static createMilgrain(
+    config: RingConfig, radius: number, z: number, beadR: number
+  ): THREE.Group {
+    const g = new THREE.Group();
+    g.name = 'milgrain';
+    const metal = JewelryGenerator.createMetalMaterial(config);
+    const beadGeo = new THREE.SphereGeometry(beadR, 8, 6);
+    const count = Math.max(24, Math.round((2 * Math.PI * radius) / (beadR * 2.0)));
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2;
+      const bead = new THREE.Mesh(beadGeo, metal);
+      bead.position.set(Math.cos(a) * radius, Math.sin(a) * radius, z);
+      g.add(bead);
     }
     return g;
   }
