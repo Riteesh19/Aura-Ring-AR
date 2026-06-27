@@ -177,6 +177,40 @@ export class JewelryGenerator {
     return group;
   }
 
+  // ─── Public API for the GLB-mesh setting path ───────────────────────────────
+  //  The setting (band/gallery/prongs) may come from a baked AI-generated mesh, but the DIAMOND
+  //  stays procedural so it can resize per carat. These let the mesh path reuse the exact same
+  //  faceted stone + PBR metal material as the procedural path.
+
+  /** PBR metal material for the selected metal type/finish (used to recolour loaded meshes). */
+  public static getMetalMaterial(config: RingConfig): THREE.MeshPhysicalMaterial {
+    return JewelryGenerator.createMetalMaterial(config);
+  }
+
+  /**
+   * The procedural centre diamond, sized for the selected carat/shape. Returned in its local
+   * frame: girdle plane z≈0, table → +Z, culet → −Z; half-width carried on userData.halfWidth.
+   * Caller positions/orients it into the loaded setting's basket via the per-design anchor.
+   */
+  public static createCenterStone(config: RingConfig): THREE.Mesh {
+    const R = JewelryGenerator.halfWidthMm(config.stoneShape, config.stoneCarat);
+    const spec = JewelryGenerator.buildShape(config.stoneShape, R);
+    const mesh = new THREE.Mesh(spec.geometry, JewelryGenerator.createDiamondMaterial(config));
+    mesh.name = 'stone';
+    mesh.userData.halfWidth = R;
+    mesh.userData.pavilionDepth = spec.pavilionDepth;
+    return mesh;
+  }
+
+  /** Depth-only finger-occlusion cylinder (Y axis) sized to a given hole radius / band length. */
+  public static createOcclusion(radius: number, length: number): THREE.Mesh {
+    const geo = new THREE.CylinderGeometry(radius, radius, length, 32);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: true }));
+    mesh.renderOrder = -1;
+    mesh.name = 'occlusion-finger';
+    return mesh;
+  }
+
   // ─── Assembly layouts (driven by SettingSpec structural fields) ──────────────
 
   /** Solitaire / halo / hidden-halo: one centre cluster, accents driven by the spec fields. */

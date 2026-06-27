@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { appState } from '../state/store';
 import { JewelryGenerator, RingConfig } from './JewelryGenerator';
 import { resolveSettingSpec } from '../data/settingSpecs';
+import { SETTING_MESH_CONFIGS, SettingMeshConfig, loadSettingScene, assembleSetting } from './SettingMeshLoader';
 
 // Global definitions for MediaPipe loaded via CDN
 declare global {
@@ -431,6 +432,58 @@ export class HandCalibrator {
       console.error('[build3DRing] generateRing failed for config', config, e);
       this.ringGroup = null;
     }
+
+    // Real-mesh setting path — INERT until a design's GLB exists and its config is calibrated
+    // (SETTING_MESH_CONFIGS[...].enabled). The procedural ring above is the immediate render; if a
+    // baked mesh is enabled for this design, load it async and swap it in. Tracking is untouched —
+    // drawAugmentedRing3D just transforms this.ringGroup regardless of its geometry source.
+    const meshCfg = SETTING_MESH_CONFIGS[config.setting.key];
+    if (meshCfg?.enabled) {
+      this.buildRingFromMesh(config, meshCfg).catch((err) =>
+        // eslint-disable-next-line no-console
+        console.warn('[SettingMesh] load failed; keeping procedural setting', err));
+    }
+  }
+
+  /**
+   * Build the ring from a baked GLB setting mesh + the procedural diamond, and swap it in for the
+   * procedural placeholder. Only the SETTING geometry source changes; the diamond stays procedural
+   * (resizes per carat) and the AR tracking math is unchanged.
+   */
+  private async buildRingFromMesh(config: RingConfig, meshCfg: SettingMeshConfig): Promise<void> {
+    const scene = await loadSettingScene(meshCfg);
+    const metal = JewelryGenerator.getMetalMaterial(config);
+    const settingGroup = assembleSetting(scene, meshCfg, metal);
+
+    const ring = new THREE.Group();
+    ring.name = 'ring-assembly-mesh';
+    ring.add(JewelryGenerator.createOcclusion(meshCfg.occlusion.radius, meshCfg.occlusion.length));
+    ring.add(settingGroup);
+    const stone = JewelryGenerator.createCenterStone(config);
+    const a = meshCfg.diamondAnchor.position;
+    stone.position.set(a[0], a[1], a[2]);
+    ring.add(stone);
+
+    // Replace the current ringGroup. Procedural rings dispose fully; mesh rings dispose only the
+    // parts WE created (GLB geometry is shared via the loader cache, so it must not be disposed).
+    if (this.ringGroup) {
+      this.scene.remove(this.ringGroup);
+      if (this.ringGroup.name === 'ring-assembly') JewelryGenerator.disposeGroup(this.ringGroup);
+      else this.disposeOwnedParts(this.ringGroup);
+    }
+    ring.visible = false;
+    this.ringGroup = ring;
+    this.scene.add(ring);
+  }
+
+  /** Dispose only engine-created geometry/materials, leaving shared/cached GLB geometry intact. */
+  private disposeOwnedParts(group: THREE.Group): void {
+    group.traverse((o: any) => {
+      if (o.name === 'stone' || o.name === 'occlusion-finger') {
+        o.geometry?.dispose?.();
+        const m = o.material; if (m) (Array.isArray(m) ? m : [m]).forEach((x: any) => x.dispose?.());
+      }
+    });
   }
 
   /**

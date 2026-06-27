@@ -149,6 +149,30 @@ collapsed into a "foggy grey blob / rod-on-a-blob". Fixed for readability at act
 user's visual confirmation across 2–3 configs (this remains the standing visual-QA gap). Candidate
 **Milestone 3** if any config still reads as mush after live testing.
 
+#### Real-mesh setting path (scaffold — inert until GLBs exist)
+
+Switching the metal SETTING geometry from runtime-procedural primitives to real AI-generated GLB
+meshes (one per design, from the reference photos via Meshy/Tripo/CGDream). The **diamond stays
+procedural** (resizes per carat). Scaffolded the integration so it's drop-in ready; **inert by
+default** (every design `enabled: false`), so the procedural path remains the live render and
+nothing regresses.
+
+- `src/utils/SettingMeshLoader.ts` — `GLTFLoader` + `DRACOLoader` (Meshy/Tripo exports are often
+  Draco-compressed; decoder libs ship with three 0.184), per-design `SETTING_MESH_CONFIGS`,
+  `inspectSceneGraph` (logs nodes/materials/bbox), and `assembleSetting` (hides baked stone, swaps
+  metal materials to the PBR metal, applies a normalize transform). Exposes
+  `window.inspectSettingMesh('<key>')` for the inspection step.
+- `JewelryGenerator` public API: `getMetalMaterial`, `createCenterStone` (procedural diamond, sized
+  per carat, table→+Z), `createOcclusion` — so the mesh path reuses the exact diamond + metal.
+- `build3DRing` kicks off the async mesh build **only** when a design's config is `enabled`; replaces
+  `this.ringGroup` in place, so AR tracking (`drawAugmentedRing3D`) is completely unchanged.
+- `frontend/public/setting-models/` — drop folder + README with the exact filenames and workflow.
+
+**Blocked on Step 0 (user):** the 4 GLBs don't exist yet. Once dropped into
+`frontend/public/setting-models/`, run `window.inspectSettingMesh(...)` per design, fill each config's
+`normalize` / anchors / material+stone matchers / occlusion from the output, and flip `enabled: true`.
+Per-carat seating, metal recolor, and per-finger tracking are then verified against the real meshes.
+
 ### Milestone 2 — CLOSE (tag `milestone-2`)
 
 Structural accuracy, full catalog coverage, real sizing, and snug fit are complete and
